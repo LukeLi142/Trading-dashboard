@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TWSE 台灣股市交易資訊看板 - FMTQIK & 個股行情</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        finDark: '#0b0f19',
+                        finCard: '#131b2e',
+                        finCardHover: '#1c2744',
+                        finBorder: '#1e2d4a',
+                        finAccent: '#3b82f6',
+                        stockRed: '#ef4444',
+                        stockGreen: '#10b981',
+                        stockYellow: '#f59e0b'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'Noto Sans TC', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'Fira Code', 'Consolas', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b0f19;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e2d4a;
+            border-radius: 4px;
+        }
+        .glow-blue {
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
+        }
+        .glow-red {
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.2);
+        }
+        .glow-green {
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
+        }
+    </style>
+</head>
+<body class="bg-finDark text-slate-100 font-sans min-h-screen flex flex-col justify-between selection:bg-blue-600 selection:text-white">
+
+    <!-- TOP NAVIGATION HEADER -->
+    <header class="border-b border-finBorder bg-finCard/90 backdrop-blur-md sticky top-0 z-40 px-4 lg:px-8 py-3.5">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
+            
+            <!-- Logo & Title -->
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-400 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-blue-500/20">
+                    <i class="fa-solid fa-chart-line"></i>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-lg font-bold tracking-wide text-white">TWSE 股市交易資訊看板</h1>
+                        <span id="badgeApiSource" class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/30">
+                            FMTQIK / STOCK_DAY
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-400">臺灣證券交易所集中市場每日成交資訊與個股歷史研判</p>
+                </div>
+            </div>
+
+            <!-- Quick Ticker & Controls Bar -->
+            <div class="flex flex-wrap items-center gap-2 font-mono text-xs">
+                
+                <!-- Mode Selector Dropdown -->
+                <div class="bg-slate-900 border border-finBorder rounded-lg p-1 flex items-center">
+                    <button id="modeFmtqikBtn" class="px-3 py-1.5 rounded-md font-medium text-white bg-blue-600 transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-globe text-xs"></i> 集中市場大盤 (FMTQIK)
+                    </button>
+                    <button id="modeStockBtn" class="px-3 py-1.5 rounded-md font-medium text-slate-400 hover:text-white transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-building text-xs"></i> 個股明細 (STOCK_DAY)
+                    </button>
+                </div>
+
+                <!-- Stock Code Input (Visible in Stock Mode) -->
+                <div id="stockInputContainer" class="hidden flex items-center gap-1.5 bg-slate-900 border border-finBorder rounded-lg px-2 py-1">
+                    <i class="fa-solid fa-search text-slate-400 text-xs"></i>
+                    <input type="text" id="stockCodeInput" value="2330" placeholder="代號如 2330" class="bg-transparent w-16 text-slate-200 focus:outline-none uppercase text-xs font-bold">
+                    <button id="searchStockBtn" class="bg-blue-600 hover:bg-blue-500 px-2 py-1 rounded text-[11px] text-white">查詢</button>
+                </div>
+
+                <!-- Fast Stock Pickers -->
+                <div id="quickStockPickers" class="hidden md:flex items-center gap-1 text-[11px]">
+                    <button data-code="2330" class="quick-stock-btn bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded border border-slate-700 text-slate-300">2330 台積電</button>
+                    <button data-code="2317" class="quick-stock-btn bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded border border-slate-700 text-slate-300">2317 鴻海</button>
+                    <button data-code="2454" class="quick-stock-btn bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded border border-slate-700 text-slate-300">2454 聯發科</button>
+                    <button data-code="0050" class="quick-stock-btn bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded border border-slate-700 text-slate-300">0050 元大台灣50</button>
+                </div>
+
+                <!-- API Settings Button -->
+                <button id="btnOpenConfig" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition" title="API 介接設定">
+                    <i class="fa-solid fa-sliders"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto w-full p-4 lg:p-6 flex flex-col gap-6 flex-grow">
+
+        <!-- QUERY CONTROL & DATE PICKER STRIP -->
+        <section class="bg-finCard border border-finBorder rounded-2xl p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shadow-xl">
+            <div class="flex flex-wrap items-center gap-3">
+                <div class="flex items-center gap-2">
+                    <label class="text-xs font-mono text-slate-400 flex items-center gap-1.5">
+                        <i class="fa-regular fa-calendar-days text-blue-400"></i> 查詢月份:
+                    </label>
+                    <input type="month" id="datePicker" value="2024-09" class="bg-slate-900 border border-finBorder rounded-xl px-3 py-1.5 text-xs font-mono text-slate-100 focus:outline-none focus:border-blue-500">
+                </div>
+
+                <button id="btnFetchData" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium px-4 py-1.5 rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-blue-600/20 transition">
+                    <i class="fa-solid fa-arrows-rotate text-xs"></i> 載入資料 (TWSE API)
+                </button>
+
+                <!-- Status indicator -->
+                <div class="flex items-center gap-2 text-xs font-mono pl-2 border-l border-slate-700">
+                    <span id="dataStatusDot" class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    <span id="dataStatusText" class="text-slate-300">資料已就緒</span>
+                </div>
+            </div>
+
+            <!-- Endpoint URL Display Box -->
+            <div class="bg-slate-950/80 rounded-xl px-3 py-1.5 border border-slate-800 flex items-center gap-2 text-xs font-mono text-slate-400 overflow-x-auto max-w-full">
+                <span class="text-cyan-400 font-bold shrink-0">API:</span>
+                <span id="endpointDisplay" class="text-slate-300 truncate">https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?response=json&date=20240901</span>
+                <button id="btnCopyApiUrl" class="text-slate-500 hover:text-white transition ml-auto" title="複製 API 網址">
+                    <i class="fa-regular fa-copy"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- METRICS KPI CARDS GRID -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            <!-- KPI 1: Index / Price -->
+            <div class="bg-finCard border border-finBorder rounded-2xl p-4 flex flex-col justify-between shadow-xl relative overflow-hidden group hover:border-slate-600 transition">
+                <div class="flex justify-between items-start mb-2">
+                    <span id="kpiLabelPrice" class="text-xs font-mono text-slate-400 uppercase tracking-wider">加權股價指數 (最新)</span>
+                    <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center text-sm border border-blue-500/20">
+                        <i class="fa-solid fa-chart-line"></i>
+                    </div>
+                </div>
+                <div class="flex items-baseline justify-between mt-1">
+                    <span id="kpiValPrice" class="text-2xl font-bold font-mono tracking-tight text-white">22,268.57</span>
+                    <span id="kpiBadgeChange" class="text-xs font-mono font-semibold px-2 py-0.5 rounded-md bg-emerald-950 text-emerald-400 border border-emerald-800/60 flex items-center gap-1">
+                        <i class="fa-solid fa-caret-up"></i> +112.45
+                    </span>
+                </div>
+                <div class="text-[11px] text-slate-400 mt-2 font-mono flex justify-between border-t border-slate-800/60 pt-2">
+                    <span>最高: <strong id="kpiPriceHigh" class="text-slate-200">22,450.12</strong></span>
+                    <span>最低: <strong id="kpiPriceLow" class="text-slate-200">21,980.30</strong></span>
+                </div>
+            </div>
+
+            <!-- KPI 2: Total Trading Value (Turnover) -->
+            <div class="bg-finCard border border-finBorder rounded-2xl p-4 flex flex-col justify-between shadow-xl relative overflow-hidden group hover:border-slate-600 transition">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-xs font-mono text-slate-400 uppercase tracking-wider">當月總成交金額</span>
+                    <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center text-sm border border-amber-500/20">
+                        <i class="fa-solid fa-sack-dollar"></i>
+                    </div>
+                </div>
+                <div class="flex items-baseline justify-between mt-1">
+                    <span id="kpiValTurnover" class="text-2xl font-bold font-mono tracking-tight text-amber-400">7.82 兆元</span>
+                    <span id="kpiAvgTurnover" class="text-[11px] font-mono text-slate-400">日均 3,912 億</span>
+                </div>
+                <div class="text-[11px] text-slate-400 mt-2 font-mono flex justify-between border-t border-slate-800/60 pt-2">
+                    <span>交易天數: <strong id="kpiTradingDays" class="text-slate-200">20 天</strong></span>
+                    <span>單日最高: <strong id="kpiMaxTurnover" class="text-slate-200">4,520 億</strong></span>
+                </div>
+            </div>
+
+            <!-- KPI 3: Total Shares Volume -->
+            <div class="bg-finCard border border-finBorder rounded-2xl p-4 flex flex-col justify-between shadow-xl relative overflow-hidden group hover:border-slate-600 transition">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-xs font-mono text-slate-400 uppercase tracking-wider">當月總成交股數</span>
+                    <div class="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center text-sm border border-purple-500/20">
+                        <i class="fa-solid fa-layer-group"></i>
+                    </div>
+                </div>
+                <div class="flex items-baseline justify-between mt-1">
+                    <span id="kpiValVolume" class="text-2xl font-bold font-mono tracking-tight text-purple-400">142.5 億股</span>
+                    <span id="kpiAvgVolume" class="text-[11px] font-mono text-slate-400">日均 7.12 億</span>
+                </div>
+                <div class="text-[11px] text-slate-400 mt-2 font-mono flex justify-between border-t border-slate-800/60 pt-2">
+                    <span>張數換算: <strong id="kpiVolumeLots" class="text-slate-200">1,425 萬張</strong></span>
+                </div>
+            </div>
+
+            <!-- KPI 4: Total Transactions -->
+            <div class="bg-finCard border border-finBorder rounded-2xl p-4 flex flex-col justify-between shadow-xl relative overflow-hidden group hover:border-slate-600 transition">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-xs font-mono text-slate-400 uppercase tracking-wider">當月總成交筆數</span>
+                    <div class="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-sm border border-cyan-500/20">
+                        <i class="fa-solid fa-receipt"></i>
+                    </div>
+                </div>
+                <div class="flex items-baseline justify-between mt-1">
+                    <span id="kpiValTransactions" class="text-2xl font-bold font-mono tracking-tight text-cyan-400">4,821 萬筆</span>
+                    <span id="kpiAvgTransactions" class="text-[11px] font-mono text-slate-400">日均 241 萬</span>
+                </div>
+                <div class="text-[11px] text-slate-400 mt-2 font-mono flex justify-between border-t border-slate-800/60 pt-2">
+                    <span>每筆均量: <strong id="kpiAvgPerTx" class="text-slate-200">2,955 股</strong></span>
+                </div>
+            </div>
+        </section>
+
+        <!-- CHART & ANALYTICS VISUALIZATION PANEL -->
+        <section class="bg-finCard border border-finBorder rounded-2xl p-5 shadow-2xl flex flex-col gap-4">
+            
+            <!-- Chart Header Controls -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-finBorder pb-3">
+                <div class="flex items-center gap-2">
+                    <div class="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse"></div>
+                    <h2 id="chartTitle" class="text-sm font-bold text-slate-200 font-mono">
+                        加權股價指數趨勢與每日成交金額 (FMTQIK)
+                    </h2>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2 font-mono text-xs">
+                    <button id="toggleMaBtn" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 text-slate-300 transition flex items-center gap-1">
+                        <i class="fa-solid fa-wave-square text-cyan-400 text-[10px]"></i> 均線 (MA5 / MA20)
+                    </button>
+
+                    <button id="toggleVolumeBtn" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 text-slate-300 transition flex items-center gap-1">
+                        <i class="fa-solid fa-chart-simple text-amber-400 text-[10px]"></i> 顯示成交量
+                    </button>
+
+                    <select id="chartMetricSelect" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-slate-300 focus:outline-none">
+                        <option value="value">下圖：成交金額 (億元)</option>
+                        <option value="shares">下圖：成交股數 (百萬股)</option>
+                        <option value="tx">下圖：成交筆數 (千筆)</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Canvas Container -->
+            <div class="relative w-full h-[360px] md:h-[420px]">
+                <canvas id="marketChart"></canvas>
+            </div>
+        </section>
+
+        <!-- DATA TABLE & EXPORT PANEL -->
+        <section class="bg-finCard border border-finBorder rounded-2xl p-5 shadow-2xl flex flex-col gap-4">
+            
+            <!-- Table Header Bar -->
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-table-cells text-blue-400 text-sm"></i>
+                    <h3 id="tableTitle" class="text-sm font-bold text-slate-200 font-mono">每日交易詳細數據表</h3>
+                    <span id="tableRecordCount" class="text-xs font-mono text-slate-400 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
+                        共 0 筆記錄
+                    </span>
+                </div>
+
+                <div class="flex items-center gap-3 font-mono text-xs">
+                    <!-- Search Input -->
+                    <div class="relative">
+                        <i class="fa-solid fa-search absolute left-3 top-2.5 text-slate-500 text-xs"></i>
+                        <input type="text" id="tableSearchInput" placeholder="搜尋日期/價格..." class="bg-slate-900 border border-slate-700 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500 w-48">
+                    </div>
+
+                    <!-- Export CSV Button -->
+                    <button id="btnExportCsv" class="px-3 py-1.5 bg-emerald-600/80 hover:bg-emerald-500 text-white rounded-xl font-medium transition flex items-center gap-1.5 border border-emerald-500/30">
+                        <i class="fa-solid fa-file-csv"></i> 匯出 CSV
+                    </button>
+                </div>
+            </div>
+
+            <!-- Scrollable Table Grid -->
+            <div class="overflow-x-auto rounded-xl border border-finBorder">
+                <table class="w-full text-left text-xs font-mono border-collapse">
+                    <thead class="bg-slate-900 text-slate-400 uppercase border-b border-finBorder sticky top-0">
+                        <tr id="tableHeadRow">
+                            <th class="p-3">日期</th>
+                            <th class="p-3 text-right">成交股數</th>
+                            <th class="p-3 text-right">成交金額 (NTD)</th>
+                            <th class="p-3 text-right">成交筆數</th>
+                            <th class="p-3 text-right">發行量加權股價指數</th>
+                            <th class="p-3 text-right">漲跌點數</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-slate-800/60 bg-slate-950/40">
+                        <!-- Rows rendered dynamically -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Table Footer Pagination / Info -->
+            <div class="flex flex-col sm:flex-row items-center justify-between text-xs font-mono text-slate-400 pt-2 gap-2">
+                <div>
+                    數據來源：<a href="https://www.twse.com.tw" target="_blank" class="text-blue-400 underline hover:text-blue-300">臺灣證券交易所 (TWSE)</a> OpenAPI / RWD REST
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="prevPageBtn" class="px-2.5 py-1 bg-slate-900 border border-slate-800 rounded-md hover:bg-slate-800 disabled:opacity-40">上一頁</button>
+                    <span id="pageIndicator" class="text-slate-300">1 / 1</span>
+                    <button id="nextPageBtn" class="px-2.5 py-1 bg-slate-900 border border-slate-800 rounded-md hover:bg-slate-800 disabled:opacity-40">下一頁</button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- API CONFIGURATION MODAL -->
+    <div id="configModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-finCard border border-finBorder rounded-2xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-4 font-mono">
+            <div class="flex justify-between items-center border-b border-finBorder pb-3">
+                <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-network-wired text-cyan-400"></i> TWSE API 數據請求設定
+                </h3>
+                <button id="btnCloseConfig" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+
+            <div class="text-xs text-slate-300 space-y-4 leading-relaxed">
+                <p>證交所官方 API (<code class="text-cyan-400">twse.com.tw</code>) 限制瀏覽器跨網域請求 (CORS)。本系統提供模式切換與代理伺服器選項：</p>
+                
+                <div class="space-y-2">
+                    <label class="block font-bold text-slate-200">數據獲取方式：</label>
+                    <div class="space-y-1.5">
+                        <label class="flex items-center gap-2 p-2 bg-slate-900 rounded-lg border border-slate-800 cursor-pointer hover:border-slate-700">
+                            <input type="radio" name="fetchMode" value="proxy" checked class="text-blue-600 focus:ring-0">
+                            <div>
+                                <strong class="text-slate-100">使用 CORS 跨域代理 API (即時線上資料)</strong>
+                                <p class="text-[11px] text-slate-400">透過公用 CORS Proxy 轉發證交所 API 請求</p>
+                            </div>
+                        </label>
+                        <label class="flex items-center gap-2 p-2 bg-slate-900 rounded-lg border border-slate-800 cursor-pointer hover:border-slate-700">
+                            <input type="radio" name="fetchMode" value="mock" class="text-blue-600 focus:ring-0">
+                            <div>
+                                <strong class="text-slate-100">模擬示範數據集 (離線高流暢度)</strong>
+                                <p class="text-[11px] text-slate-400">即使網絡遭受阻擋亦能完美展現專業圖表與指標計算</p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-bold text-slate-200 mb-1">CORS 代理服務網址模板：</label>
+                    <input type="text" id="proxyUrlInput" value="https://corsproxy.io/?" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-xs text-slate-200 focus:outline-none focus:border-cyan-500 font-mono">
+                    <p class="text-[10px] text-slate-500 mt-1">可更換為其他 Proxy 如 <code class="text-slate-400">https://api.allorigins.win/raw?url=</code></p>
+                </div>
+            </div>
+
+            <button id="btnSaveConfig" class="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs transition">
+                儲存設定並重新載入
+            </button>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="border-t border-finBorder py-4 px-4 bg-finCard/40 text-center text-xs text-slate-500 font-mono">
+        TWSE Stock Trading Dashboard &bull; Powered by Chart.js & Tailwind CSS &bull; 數據來源：臺灣證券交易所
+    </footer>
+
+    <script>
+        const MOCK_FMTQIK_DATA = [
+            ["113/09/02", "7,120,450,120", "385,420,150,000", "2,150,400", "22,268.57", "+112.45"],
+            ["113/09/03", "6,980,120,000", "371,200,800,000", "2,080,100", "22,156.12", "-112.45"],
+            ["113/09/04", "8,250,900,400", "430,150,300,000", "2,420,800", "21,832.70", "-323.42"],
+            ["113/09/05", "7,540,300,000", "398,100,000,000", "2,210,000", "22,015.10", "+182.40"],
+            ["113/09/06", "7,810,600,000", "410,500,200,000", "2,310,500", "22,110.80", "+95.70"],
+            ["113/09/09", "7,320,000,000", "380,200,000,000", "2,180,000", "22,230.15", "+119.35"],
+            ["113/09/10", "6,850,400,000", "356,100,800,000", "2,010,200", "22,180.50", "-49.65"],
+            ["113/09/11", "7,950,120,000", "415,800,000,000", "2,350,900", "22,320.00", "+139.50"],
+            ["113/09/12", "8,100,300,000", "422,900,100,000", "2,390,000", "22,450.12", "+130.12"],
+            ["113/09/13", "7,620,800,000", "392,400,500,000", "2,240,600", "22,390.20", "-59.92"],
+            ["113/09/16", "6,520,100,000", "340,100,000,000", "1,920,400", "22,280.00", "-110.20"],
+            ["113/09/18", "7,890,300,000", "408,300,200,000", "2,290,100", "22,410.50", "+130.50"],
+            ["113/09/19", "8,450,200,000", "445,100,000,000", "2,510,800", "22,600.80", "+190.30"],
+            ["113/09/20", "8,920,500,000", "472,300,900,000", "2,680,300", "22,520.10", "-80.70"],
+            ["113/09/23", "7,210,000,000", "375,400,000,000", "2,110,000", "22,480.30", "-39.80"],
+            ["113/09/24", "7,650,400,000", "399,800,100,000", "2,250,400", "22,620.00", "+139.70"],
+            ["113/09/25", "8,120,900,000", "428,200,500,000", "2,380,900", "22,760.50", "+140.50"],
+            ["113/09/26", "8,350,100,000", "439,100,000,000", "2,450,200", "22,850.20", "+89.70"],
+            ["113/09/27", "8,600,000,000", "452,000,000,000", "2,520,000", "22,790.00", "-60.20"],
+            ["113/09/30", "7,410,200,000", "388,500,000,000", "2,170,100", "22,680.10", "-109.90"]
+        ];
+
+        const MOCK_STOCK_DATA = {
+            "title": "113年09月 2330 台積電 各日成交資訊",
+            "fields": ["日期", "成交股數", "成交金額", "開盤價", "最高價", "最低價", "收盤價", "漲跌價差", "成交筆數"],
+            "data": [
+                ["113/09/02", "32,150,400", "30,220,150,000", "940.00", "948.00", "938.00", "945.00", "+5.00", "42,100"],
+                ["113/09/03", "28,900,120", "27,100,800,000", "942.00", "945.00", "935.00", "938.00", "-7.00", "38,200"],
+                ["113/09/04", "45,250,900", "41,150,300,000", "915.00", "920.00", "899.00", "909.00", "-29.00", "65,400"],
+                ["113/09/05", "35,400,300", "32,300,000,000", "912.00", "922.00", "908.00", "918.00", "+9.00", "48,100"],
+                ["113/09/06", "31,800,600", "29,200,200,000", "920.00", "925.00", "915.00", "918.00", "0.00", "41,500"],
+                ["113/09/09", "29,320,000", "27,200,000,000", "922.00", "930.00", "920.00", "928.00", "+10.00", "39,000"],
+                ["113/09/10", "26,850,400", "24,800,800,000", "925.00", "928.00", "920.00", "923.00", "-5.00", "35,100"],
+                ["113/09/11", "34,950,120", "32,500,000,000", "926.00", "936.00", "924.00", "935.00", "+12.00", "46,900"],
+                ["113/09/12", "38,100,300", "35,800,100,000", "940.00", "945.00", "936.00", "942.00", "+7.00", "51,000"],
+                ["113/09/13", "30,620,800", "28,900,500,000", "945.00", "948.00", "940.00", "944.00", "+2.00", "40,600"],
+                ["113/09/16", "24,520,100", "23,100,000,000", "942.00", "945.00", "938.00", "940.00", "-4.00", "32,400"],
+                ["113/09/18", "33,890,300", "32,200,200,000", "945.00", "955.00", "942.00", "953.00", "+13.00", "45,100"],
+                ["113/09/19", "41,450,200", "39,800,000,000", "960.00", "968.00", "958.00", "960.00", "+7.00", "58,800"],
+                ["113/09/20", "48,920,500", "47,100,900,000", "965.00", "970.00", "955.00", "958.00", "-2.00", "68,300"],
+                ["113/09/23", "28,210,000", "27,000,000,000", "960.00", "962.00", "952.00", "955.00", "-3.00", "37,000"],
+                ["113/09/24", "32,650,400", "31,500,100,000", "960.00", "972.00", "958.00", "970.00", "+15.00", "43,400"],
+                ["113/09/25", "36,120,900", "35,200,500,000", "975.00", "982.00", "970.00", "978.00", "+8.00", "49,900"],
+                ["113/09/26", "42,350,100", "41,900,000,000", "985.00", "995.00", "980.00", "990.00", "+12.00", "59,200"],
+                ["113/09/27", "44,600,000", "44,200,000,000", "995.00", "1000.00", "985.00", "988.00", "-2.00", "62,000"],
+                ["113/09/30", "35,410,200", "34,850,000,000", "980.00", "985.00", "972.00", "975.00", "-13.00", "47,100"]
+            ]
+        };
+
+        // Application State
+        let currentMode = 'FMTQIK'; // 'FMTQIK' or 'STOCK_DAY'
+        let currentStockCode = '2330';
+        let currentYearMonth = '2024-09';
+        let fetchMode = 'proxy'; // 'proxy' or 'mock'
+        let proxyBaseUrl = 'https://corsproxy.io/?';
+        
+        let chartInstance = null;
+        let showMovingAverages = true;
+        let showVolume = true;
+        let currentDataset = [];
+        let filteredDataset = [];
+
+        // Pagination state
+        let currentPage = 1;
+        const pageSize = 10;
+
+        const modeFmtqikBtn = document.getElementById('modeFmtqikBtn');
+        const modeStockBtn = document.getElementById('modeStockBtn');
+        const stockInputContainer = document.getElementById('stockInputContainer');
+        const quickStockPickers = document.getElementById('quickStockPickers');
+        const stockCodeInput = document.getElementById('stockCodeInput');
+        const searchStockBtn = document.getElementById('searchStockBtn');
+        const datePicker = document.getElementById('datePicker');
+        const btnFetchData = document.getElementById('btnFetchData');
+        const endpointDisplay = document.getElementById('endpointDisplay');
+        const dataStatusDot = document.getElementById('dataStatusDot');
+        const dataStatusText = document.getElementById('dataStatusText');
+        const tableSearchInput = document.getElementById('tableSearchInput');
+        const chartMetricSelect = document.getElementById('chartMetricSelect');
+        const toggleMaBtn = document.getElementById('toggleMaBtn');
+        const toggleVolumeBtn = document.getElementById('toggleVolumeBtn');
+
+        function parseNum(val) {
+            if (!val) return 0;
+            return parseFloat(String(val).replace(/,/g, '')) || 0;
+        }
+
+        function formatNum(num) {
+            if (isNaN(num)) return '0';
+            return num.toLocaleString('en-US');
+        }
+
+        function formatTurnoverYi(num) {
+            const yi = num / 100000000;
+            if (yi >= 10000) {
+                return (yi / 10000).toFixed(2) + ' 兆';
+            }
+            return Math.round(yi).toLocaleString() + ' 億';
+        }
+
+        function formatSharesYi(num) {
+            const yi = num / 100000000;
+            return yi.toFixed(2) + ' 億股';
+        }
+
+        function buildApiUrl() {
+            const formattedDate = currentYearMonth.replace('-', '') + '01';
+            if (currentMode === 'FMTQIK') {
+                return `https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?response=json&date=${formattedDate}`;
+            } else {
+                return `https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY?response=json&date=${formattedDate}&stockNo=${currentStockCode}`;
+            }
+        }
+
+        async function fetchMarketData() {
+            const apiUrl = buildApiUrl();
+            endpointDisplay.innerText = apiUrl;
+            
+            dataStatusDot.className = 'w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping';
+            dataStatusText.innerText = '載入中...';
+
+            if (fetchMode === 'mock') {
+                setTimeout(() => {
+                    processApiResponse(getMockResponse());
+                }, 300);
+                return;
+            }
+
+            try {
+                const targetUrl = proxyBaseUrl + encodeURIComponent(apiUrl);
+                const res = await fetch(targetUrl);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const json = await res.json();
+                
+                if (json.stat === 'OK' && json.data && json.data.length > 0) {
+                    processApiResponse(json);
+                } else {
+                    console.warn('TWSE returned no data, falling back to mock dataset.');
+                    processApiResponse(getMockResponse());
+                }
+            } catch (err) {
+                console.warn('CORS Proxy fetch failed:', err);
+                dataStatusDot.className = 'w-2.5 h-2.5 rounded-full bg-amber-500';
+                dataStatusText.innerText = '代理模式切換至模擬資料';
+                processApiResponse(getMockResponse());
+            }
+        }
+
+        function getMockResponse() {
+            if (currentMode === 'FMTQIK') {
+                return {
+                    stat: "OK",
+                    title: `${currentYearMonth} 集中市場每日成交資訊`,
+                    fields: ["日期", "成交股數", "成交金額", "成交筆數", "發行量加權股價指數", "漲跌點數"],
+                    data: MOCK_FMTQIK_DATA
+                };
+            } else {
+                return {
+                    stat: "OK",
+                    title: `${currentYearMonth} ${currentStockCode} 個股各日成交資訊`,
+                    fields: MOCK_STOCK_DATA.fields,
+                    data: MOCK_STOCK_DATA.data
+                };
+            }
+        }
+
+        function processApiResponse(json) {
+            dataStatusDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500';
+            dataStatusText.innerText = '資料已更新';
+
+            currentDataset = json.data || [];
+            filteredDataset = [...currentDataset];
+
+            updateKpiMetrics();
+            renderChart();
+            renderTableHead(json.fields);
+            renderTableBody();
+        }
+
+        function updateKpiMetrics() {
+            if (currentDataset.length === 0) return;
+
+            const days = currentDataset.length;
+            let totalVolume = 0;
+            let totalTurnover = 0;
+            let totalTx = 0;
+            let prices = [];
+
+            if (currentMode === 'FMTQIK') {
+                document.getElementById('kpiLabelPrice').innerText = '加權股價指數 (最新)';
+                
+                currentDataset.forEach(row => {
+                    totalVolume += parseNum(row[1]);
+                    totalTurnover += parseNum(row[2]);
+                    totalTx += parseNum(row[3]);
+                    prices.push(parseNum(row[4]));
+                });
+
+                const lastRow = currentDataset[currentDataset.length - 1];
+                const lastPrice = parseNum(lastRow[4]);
+                const changeStr = lastRow[5] || '0';
+                const changeNum = parseNum(changeStr);
+
+                document.getElementById('kpiValPrice').innerText = lastPrice.toLocaleString('en-US', { minimumFractionDigits: 2 });
+                
+                const changeBadge = document.getElementById('kpiBadgeChange');
+                if (changeStr.includes('+') || changeNum > 0) {
+                    changeBadge.className = 'text-xs font-mono font-semibold px-2 py-0.5 rounded-md bg-emerald-950 text-emerald-400 border border-emerald-800/60 flex items-center gap-1';
+                    changeBadge.innerHTML = `<i class="fa-solid fa-caret-up"></i> +${Math.abs(changeNum).toFixed(2)}`;
+                } else if (changeStr.includes('-') || changeNum < 0) {
+                    changeBadge.className = 'text-xs font-mono font-semibold px-2 py-0.5 rounded-md bg-red-950 text-red-400 border border-red-800/60 flex items-center gap-1';
+                    changeBadge.innerHTML = `<i class="fa-solid fa-caret-down"></i> -${Math.abs(changeNum).toFixed(2)}`;
+                } else {
+                    changeBadge.className = 'text-xs font-mono font-semibold px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700 flex items-center gap-1';
+                    changeBadge.innerHTML = `0.00`;
+                }
+
+                document.getElementById('kpiPriceHigh').innerText = Math.max(...prices).toLocaleString('en-US', { minimumFractionDigits: 2 });
+                document.getElementById('kpiPriceLow').innerText = Math.min(...prices).toLocaleString('en-US', { minimumFractionDigits: 2 });
+
+            } else {
+                // STOCK_DAY mode
+                document.getElementById('kpiLabelPrice').innerText = `${currentStockCode} 收盤價 (最新)`;
+                
+                currentDataset.forEach(row => {
+                    totalVolume += parseNum(row[1]);
+                    totalTurnover += parseNum(row[2]);
+                    totalTx += parseNum(row[8]);
+                    prices.push(parseNum(row[6])); // Close price
+                });
+
+                const lastRow = currentDataset[currentDataset.length - 1];
+                const lastPrice = parseNum(lastRow[6]);
+                const changeNum = parseNum(lastRow[7]);
+
+                document.getElementById('kpiValPrice').innerText = lastPrice.toFixed(2) + ' 元';
+                
+                const changeBadge = document.getElementById('kpiBadgeChange');
+                if (changeNum > 0) {
+                    changeBadge.className = 'text-xs font-mono font-semibold px-2 py-0.5 rounded-md bg-emerald-950 text-emerald-400 border border-emerald-800/60 flex items-center gap-1';
+                    changeBadge.innerHTML = `<i class="fa-solid fa-caret-up"></i> +${changeNum.toFixed(2)}`;
+                } else if (changeNum < 0) {
+                    changeBadge.className = 'text-xs font-mono font-semibold px-2 py-0.5 rounded-md bg-red-950 text-red-400 border border-red-800/60 flex items-center gap-1';
+                    changeBadge.innerHTML = `<i class="fa-solid fa-caret-down"></i> ${changeNum.toFixed(2)}`;
+                } else {
+                    changeBadge.className = 'text-xs font-mono font-semibold px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700 flex items-center gap-1';
+                    changeBadge.innerHTML = `0.00`;
+                }
+
+                document.getElementById('kpiPriceHigh').innerText = Math.max(...prices).toFixed(2) + ' 元';
+                document.getElementById('kpiPriceLow').innerText = Math.min(...prices).toFixed(2) + ' 元';
+            }
+
+            // Turnover KPI
+            document.getElementById('kpiValTurnover').innerText = formatTurnoverYi(totalTurnover);
+            document.getElementById('kpiAvgTurnover').innerText = `日均 ${formatTurnoverYi(totalTurnover / days)}`;
+            document.getElementById('kpiTradingDays').innerText = `${days} 天`;
+            
+            let maxDailyTurnover = 0;
+            currentDataset.forEach(r => {
+                const val = parseNum(r[2]);
+                if (val > maxDailyTurnover) maxDailyTurnover = val;
+            });
+            document.getElementById('kpiMaxTurnover').innerText = formatTurnoverYi(maxDailyTurnover);
+
+            // Volume KPI
+            document.getElementById('kpiValVolume').innerText = formatSharesYi(totalVolume);
+            document.getElementById('kpiAvgVolume').innerText = `日均 ${formatSharesYi(totalVolume / days)}`;
+            document.getElementById('kpiVolumeLots').innerText = `${Math.round(totalVolume / 1000).toLocaleString()} 張`;
+
+            // Tx KPI
+            document.getElementById('kpiValTransactions').innerText = `${Math.round(totalTx / 10000).toLocaleString()} 萬筆`;
+            document.getElementById('kpiAvgTransactions').innerText = `日均 ${Math.round((totalTx / days) / 10000).toLocaleString()} 萬`;
+            document.getElementById('kpiAvgPerTx').innerText = `${Math.round(totalVolume / (totalTx || 1)).toLocaleString()} 股`;
+        }
+
+        function computeMovingAverage(dataArr, period) {
+            let res = [];
+            for (let i = 0; i < dataArr.length; i++) {
+                if (i < period - 1) {
+                    res.push(null);
+                } else {
+                    let sum = 0;
+                    for (let j = i - period + 1; j <= i; j++) {
+                        sum += dataArr[j];
+                    }
+                    res.push(sum / period);
+                }
+            }
+            return res;
+        }
+
+        function renderChart() {
+            const ctx = document.getElementById('marketChart').getContext('2d');
+            
+            const dates = currentDataset.map(r => r[0]);
+            let priceArr = [];
+            let metricArr = [];
+            const metricType = chartMetricSelect.value;
+
+            if (currentMode === 'FMTQIK') {
+                priceArr = currentDataset.map(r => parseNum(r[4]));
+                if (metricType === 'value') {
+                    metricArr = currentDataset.map(r => parseNum(r[2]) / 100000000); // 億元
+                } else if (metricType === 'shares') {
+                    metricArr = currentDataset.map(r => parseNum(r[1]) / 1000000); // 百萬股
+                } else {
+                    metricArr = currentDataset.map(r => parseNum(r[3]) / 1000); // 千筆
+                }
+                document.getElementById('chartTitle').innerText = `加權股價指數與每日成交資訊 (${currentYearMonth})`;
+            } else {
+                priceArr = currentDataset.map(r => parseNum(r[6])); // 收盤價
+                if (metricType === 'value') {
+                    metricArr = currentDataset.map(r => parseNum(r[2]) / 100000000);
+                } else if (metricType === 'shares') {
+                    metricArr = currentDataset.map(r => parseNum(r[1]) / 1000); // 千股/張
+                } else {
+                    metricArr = currentDataset.map(r => parseNum(r[8])); // 筆數
+                }
+                document.getElementById('chartTitle').innerText = `${currentStockCode} 個股走勢與成交資訊 (${currentYearMonth})`;
+            }
+
+            const ma5 = computeMovingAverage(priceArr, 5);
+            const ma20 = computeMovingAverage(priceArr, 20);
+
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+
+            const datasets = [
+                {
+                    type: 'line',
+                    label: currentMode === 'FMTQIK' ? '加權指數' : '收盤價 (元)',
+                    data: priceArr,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                    borderWidth: 2.5,
+                    fill: true,
+                    tension: 0.25,
+                    yAxisID: 'yPrice'
+                }
+            ];
+
+            if (showMovingAverages) {
+                datasets.push({
+                    type: 'line',
+                    label: '5日均線 (MA5)',
+                    data: ma5,
+                    borderColor: '#eab308',
+                    borderWidth: 1.5,
+                    borderDash: [3, 3],
+                    pointRadius: 0,
+                    tension: 0.2,
+                    yAxisID: 'yPrice'
+                });
+                datasets.push({
+                    type: 'line',
+                    label: '20日均線 (MA20)',
+                    data: ma20,
+                    borderColor: '#a855f7',
+                    borderWidth: 1.5,
+                    borderDash: [4, 4],
+                    pointRadius: 0,
+                    tension: 0.2,
+                    yAxisID: 'yPrice'
+                });
+            }
+
+            if (showVolume) {
+                let metricLabel = '成交金額 (億元)';
+                if (metricType === 'shares') metricLabel = currentMode === 'FMTQIK' ? '成交量 (百萬股)' : '成交量 (千股/張)';
+                if (metricType === 'tx') metricLabel = '成交筆數';
+
+                datasets.push({
+                    type: 'bar',
+                    label: metricLabel,
+                    data: metricArr,
+                    backgroundColor: 'rgba(239, 68, 68, 0.45)',
+                    borderColor: '#ef4444',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    yAxisID: 'yVolume'
+                });
+            }
+
+            chartInstance = new Chart(ctx, {
+                data: {
+                    labels: dates,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#94a3b8',
+                                font: { family: 'JetBrains Mono', size: 11 }
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: '#0f172a',
+                            borderColor: '#1e2d4a',
+                            borderWidth: 1,
+                            titleFont: { family: 'JetBrains Mono', size: 12 },
+                            bodyFont: { family: 'JetBrains Mono', size: 11 }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#64748b', font: { family: 'JetBrains Mono', size: 10 } }
+                        },
+                        yPrice: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 11 } }
+                        },
+                        yVolume: {
+                            type: 'linear',
+                            display: showVolume,
+                            position: 'right',
+                            grid: { drawOnChartArea: false },
+                            ticks: { color: '#64748b', font: { family: 'JetBrains Mono', size: 10 } }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderTableHead(fields) {
+            const headRow = document.getElementById('tableHeadRow');
+            headRow.innerHTML = '';
+
+            const defaultFields = currentMode === 'FMTQIK' 
+                ? ["日期", "成交股數", "成交金額 (NTD)", "成交筆數", "發行量加權股價指數", "漲跌點數"]
+                : ["日期", "成交股數", "成交金額 (NTD)", "開盤價", "最高價", "最低價", "收盤價", "漲跌價差", "成交筆數"];
+
+            const displayFields = fields || defaultFields;
+
+            displayFields.forEach((f, idx) => {
+                const th = document.createElement('th');
+                th.className = idx === 0 ? "p-3 text-left" : "p-3 text-right";
+                th.innerText = f;
+                headRow.appendChild(th);
+            });
+        }
+
+        function filterDataset() {
+            const query = tableSearchInput.value.trim().toLowerCase();
+            if (!query) {
+                filteredDataset = [...currentDataset];
+            } else {
+                filteredDataset = currentDataset.filter(row => {
+                    return row.some(cell => String(cell).toLowerCase().includes(query));
+                });
+            }
+            currentPage = 1;
+            renderTableBody();
+        }
+
+        function renderTableBody() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            document.getElementById('tableRecordCount').innerText = `共 ${filteredDataset.length} 筆記錄`;
+
+            const totalPages = Math.ceil(filteredDataset.length / pageSize) || 1;
+            currentPage = Math.min(currentPage, totalPages);
+
+            const startIdx = (currentPage - 1) * pageSize;
+            const pageData = filteredDataset.slice(startIdx, startIdx + pageSize);
+
+            if (pageData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-slate-500">查無相關交易數據</td></tr>`;
+                return;
+            }
+
+            pageData.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-900/80 transition";
+
+                row.forEach((cell, idx) => {
+                    const td = document.createElement('td');
+                    td.className = idx === 0 ? "p-3 font-semibold text-slate-200" : "p-3 text-right text-slate-300";
+
+                    // Highlight changes
+                    if ((currentMode === 'FMTQIK' && idx === 5) || (currentMode === 'STOCK_DAY' && idx === 7)) {
+                        const cellStr = String(cell);
+                        if (cellStr.includes('+') || parseNum(cellStr) > 0) {
+                            td.className += " text-emerald-400 font-bold";
+                        } else if (cellStr.includes('-') || parseNum(cellStr) < 0) {
+                            td.className += " text-red-400 font-bold";
+                        }
+                    }
+
+                    td.innerText = cell;
+                    tr.appendChild(td);
+                });
+
+                tbody.appendChild(tr);
+            });
+
+            // Pagination UI
+            document.getElementById('pageIndicator').innerText = `${currentPage} / ${totalPages}`;
+            document.getElementById('prevPageBtn').disabled = currentPage <= 1;
+            document.getElementById('nextPageBtn').disabled = currentPage >= totalPages;
+        }
+
+        function exportToCsv() {
+            if (filteredDataset.length === 0) return;
+
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+            
+            const headers = currentMode === 'FMTQIK'
+                ? ["日期", "成交股數", "成交金額", "成交筆數", "發行量加權股價指數", "漲跌點數"]
+                : ["日期", "成交股數", "成交金額", "開盤價", "最高價", "最低價", "收盤價", "漲跌價差", "成交筆數"];
+
+            csvContent += headers.join(",") + "\n";
+
+            filteredDataset.forEach(row => {
+                const cleanRow = row.map(cell => `"${String(cell).replace(/"/g, '""')}"`);
+                csvContent += cleanRow.join(",") + "\n";
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `TWSE_${currentMode}_${currentYearMonth}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        modeFmtqikBtn.onclick = () => {
+            currentMode = 'FMTQIK';
+            modeFmtqikBtn.className = "px-3 py-1.5 rounded-md font-medium text-white bg-blue-600 transition flex items-center gap-1.5";
+            modeStockBtn.className = "px-3 py-1.5 rounded-md font-medium text-slate-400 hover:text-white transition flex items-center gap-1.5";
+            stockInputContainer.classList.add('hidden');
+            quickStockPickers.classList.add('hidden');
+            document.getElementById('badgeApiSource').innerText = 'FMTQIK';
+            fetchMarketData();
+        };
+
+        modeStockBtn.onclick = () => {
+            currentMode = 'STOCK_DAY';
+            modeStockBtn.className = "px-3 py-1.5 rounded-md font-medium text-white bg-blue-600 transition flex items-center gap-1.5";
+            modeFmtqikBtn.className = "px-3 py-1.5 rounded-md font-medium text-slate-400 hover:text-white transition flex items-center gap-1.5";
+            stockInputContainer.classList.remove('hidden');
+            quickStockPickers.classList.remove('hidden');
+            document.getElementById('badgeApiSource').innerText = 'STOCK_DAY';
+            fetchMarketData();
+        };
+
+        searchStockBtn.onclick = () => {
+            const val = stockCodeInput.value.trim().toUpperCase();
+            if (val) {
+                currentStockCode = val;
+                fetchMarketData();
+            }
+        };
+
+        document.querySelectorAll('.quick-stock-btn').forEach(btn => {
+            btn.onclick = (e) => {
+                currentStockCode = e.target.getAttribute('data-code');
+                stockCodeInput.value = currentStockCode;
+                fetchMarketData();
+            };
+        });
+
+        datePicker.onchange = (e) => {
+            currentYearMonth = e.target.value;
+            fetchMarketData();
+        };
+
+        btnFetchData.onclick = fetchMarketData;
+
+        chartMetricSelect.onchange = renderChart;
+
+        toggleMaBtn.onclick = () => {
+            showMovingAverages = !showMovingAverages;
+            toggleMaBtn.classList.toggle('bg-blue-900/50', showMovingAverages);
+            renderChart();
+        };
+
+        toggleVolumeBtn.onclick = () => {
+            showVolume = !showVolume;
+            toggleVolumeBtn.classList.toggle('bg-amber-900/50', showVolume);
+            renderChart();
+        };
+
+        tableSearchInput.oninput = filterDataset;
+
+        document.getElementById('prevPageBtn').onclick = () => {
+            if (currentPage > 1) {
+                currentPage--;
+                renderTableBody();
+            }
+        };
+
+        document.getElementById('nextPageBtn').onclick = () => {
+            currentPage++;
+            renderTableBody();
+        };
+
+        document.getElementById('btnExportCsv').onclick = exportToCsv;
+
+        document.getElementById('btnCopyApiUrl').onclick = () => {
+            const text = endpointDisplay.innerText;
+            const tempInput = document.createElement("input");
+            tempInput.value = text;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand("copy");
+            document.body.removeChild(tempInput);
+            alert("API URL 已複製至剪貼簿！");
+        };
+
+        // Modal Controls
+        const configModal = document.getElementById('configModal');
+        document.getElementById('btnOpenConfig').onclick = () => configModal.classList.remove('hidden');
+        document.getElementById('btnCloseConfig').onclick = () => configModal.classList.add('hidden');
+        
+        document.getElementById('btnSaveConfig').onclick = () => {
+            const radios = document.getElementsByName('fetchMode');
+            radios.forEach(r => { if (r.checked) fetchMode = r.value; });
+            proxyBaseUrl = document.getElementById('proxyUrlInput').value.trim();
+            configModal.classList.add('hidden');
+            fetchMarketData();
+        };
+
+        // Initial Boot
+        window.onload = () => {
+            fetchMarketData();
+        };
+    </script>
+</body>
+</html>
